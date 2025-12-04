@@ -1,0 +1,125 @@
+.app-container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
+}
+
+h1 {
+  margin-bottom: 1rem;
+}
+
+.top-bar {
+  margin-bottom: 1rem;
+}
+
+button {
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+}
+
+.table th,
+.table td {
+  border: 1px solid #ddd;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.9rem;
+}
+
+.table th {
+  background: #f0f0f0;
+}
+
+.error-box {
+  background: #ffe5e5;
+  border: 1px solid #ff9999;
+  color: #900;
+  padding: 0.5rem 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.form-container {
+  margin-top: 1rem;
+  border: 1px solid #ddd;
+  padding: 1rem;
+  border-radius: 4px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-row label {
+  font-size: 0.85rem;
+  margin-bottom: 0.2rem;
+}
+
+.form-row input,
+.form-row textarea {
+  padding: 0.3rem 0.4rem;
+  font-size: 0.9rem;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+.actions-cell {
+  white-space: nowrap;
+}
+
+.detail-row {
+  background: #fafafa;
+}
+
+.inner-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.inner-table th,
+.inner-table td {
+  border: 1px solid #ddd;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.85rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.badge-ok {
+  background: #e3f8e5;
+  color: #1a7f2a;
+  border: 1px solid #b6e2bc;
+}
+
+.badge-pending {
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeeba;
+}
+
+.info-text {
+  font-size: 0.85rem;
+  color: #555;
+  margin-bottom: 0.8rem;
+}
