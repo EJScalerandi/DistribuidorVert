@@ -1,277 +1,337 @@
-import { useEffect, useState, Fragment } from 'react';
-
+// src/App.jsx
+import { useEffect, useState } from 'react';
 import { fetchPickings, setFinalCustomer } from './api/odoo';
 import './App.css';
 
-const emptyForm = {
-  name: '',
-  street: '',
-  city: '',
-  vat: '',
-  phone: '',
-  notes: '',
-};
+const APP_PASSWORD = import.meta.env.VITE_APP_LOGIN_PASSWORD;
 
 function App() {
+  // 🔐 Login
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+
+  // 📦 Datos de Odoo
   const [pickings, setPickings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [selected, setSelected] = useState(null);
-  const [form, setForm] = useState(emptyForm);
-  const [saving, setSaving] = useState(false);
-  const [expandedId, setExpandedId] = useState(null); // para ver detalle de productos
+  const [expandedId, setExpandedId] = useState(null);
 
-  const loadPickings = async () => {
-    setLoading(true);
-    setError('');
+  // 📝 Form de cliente final
+  const [formData, setFormData] = useState({
+    name: '',
+    street: '',
+    city: '',
+    vat: '',
+    phone: '',
+    notes: '',
+  });
+
+  // Al montar, ver si ya estaba logueado en esta máquina
+  useEffect(() => {
+    const stored = localStorage.getItem('distributor_app_logged_in');
+    if (stored === '1') {
+      setLoggedIn(true);
+    }
+  }, []);
+
+  // Cargar pickings cuando está logueado
+  useEffect(() => {
+    if (!loggedIn) return;
+
+    async function load() {
+      try {
+        setLoading(true);
+        setError('');
+        const data = await fetchPickings();
+        setPickings(data || []);
+      } catch (err) {
+        console.error(err);
+        setError('Error al cargar las entregas desde Odoo.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, [loggedIn]);
+
+  // 🔐 Login
+  const handleLoginSubmit = (e) => {
+    e.preventDefault();
+    if (!APP_PASSWORD) {
+      setLoginError('No hay contraseña configurada en el servidor (VITE_APP_LOGIN_PASSWORD).');
+      return;
+    }
+    if (loginPassword === APP_PASSWORD) {
+      setLoggedIn(true);
+      localStorage.setItem('distributor_app_logged_in', '1');
+      setLoginPassword('');
+      setLoginError('');
+    } else {
+      setLoginError('Contraseña incorrecta');
+    }
+  };
+
+  const handleLogout = () => {
+    setLoggedIn(false);
+    localStorage.removeItem('distributor_app_logged_in');
+    setPickings([]);
+    setExpandedId(null);
+  };
+
+  // UI helpers
+  const toggleExpand = (id) => {
+    setExpandedId((prev) => (prev === id ? null : id));
+    // Podés resetear el form si querés:
+    setFormData({
+      name: '',
+      street: '',
+      city: '',
+      vat: '',
+      phone: '',
+      notes: '',
+    });
+  };
+
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmitFinalCustomer = async (pickingId, e) => {
+    e.preventDefault();
+
+    if (!formData.name || !formData.street) {
+      setError('Nombre y dirección son obligatorios.');
+      return;
+    }
+
     try {
+      setLoading(true);
+      setError('');
+      await setFinalCustomer(pickingId, formData);
+
+      // Refrescar lista
       const data = await fetchPickings();
-      setPickings(data);
+      setPickings(data || []);
+
+      alert('Datos del cliente final guardados correctamente.');
+      setExpandedId(null);
+      setFormData({
+        name: '',
+        street: '',
+        city: '',
+        vat: '',
+        phone: '',
+        notes: '',
+      });
     } catch (err) {
       console.error(err);
-      setError('No se pudieron cargar las entregas. Revisá la API.');
+      setError('Error al guardar los datos del cliente final.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadPickings();
-  }, []);
-
-  const openForm = (picking) => {
-    setSelected(picking);
-    setForm({
-      ...emptyForm,
-      // si querés, podés precargar algo acá
-    });
+  const formatDate = (value) => {
+    if (!value) return '';
+    // value viene como string ISO normalmente
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    return d.toLocaleDateString('es-AR');
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!selected) return;
-
-    setSaving(true);
-    setError('');
-    try {
-      await setFinalCustomer(selected.id, form);
-
-      // Volvemos a cargar la lista para reflejar que está "Cargado"
-      await loadPickings();
-
-      setSelected(null);
-      setForm(emptyForm);
-    } catch (err) {
-      console.error(err);
-      setError('No se pudo guardar el cliente final. Revisá la API.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleCancel = () => {
-    setSelected(null);
-    setForm(emptyForm);
-  };
-
-  const toggleExpand = (id) => {
-    setExpandedId((prev) => (prev === id ? null : id));
-  };
-
-  return (
-    <div className="app-container">
-      <h1>Entregas pendientes del distribuidor</h1>
-
-      <div className="top-bar">
-        <button onClick={loadPickings} disabled={loading}>
-          {loading ? 'Actualizando...' : 'Actualizar lista'}
-        </button>
+  // 🔐 Pantalla de login si no está logueado
+  if (!loggedIn) {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <h1>Ingreso distribuidor</h1>
+          <form onSubmit={handleLoginSubmit}>
+            <div className="form-group">
+              <label>Contraseña</label>
+              <input
+                type="password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+              />
+            </div>
+            {loginError && <div className="error">{loginError}</div>}
+            <button type="submit">Entrar</button>
+          </form>
+        </div>
       </div>
+    );
+  }
 
-      {error && <div className="error-box">{error}</div>}
+  // ✅ App normal
+  return (
+    <div className="app">
+      <header className="app-header">
+        <h1>Entregas vía distribuidor</h1>
+        <button type="button" onClick={handleLogout}>
+          Salir
+        </button>
+      </header>
 
-      {!selected && (
-        <>
-          {loading && <p>Cargando entregas...</p>}
+      {loading && <p>Cargando...</p>}
+      {error && <p className="error">{error}</p>}
 
-          {!loading && pickings.length === 0 && (
-            <p>No hay entregas pendientes marcadas para distribuidor.</p>
-          )}
+      {pickings.length === 0 && !loading && (
+        <p>No hay entregas pendientes para el distribuidor.</p>
+      )}
 
-          {!loading && pickings.length > 0 && (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Remito</th>
-                  <th>Pedido</th>
-                  <th>Cliente</th>
-                  <th>Fecha prevista</th>
-                  <th>Estado</th>
-                  <th>Cliente final</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pickings.map((p) => (
-                  <Fragment key={p.id}>
-                    <tr>
-                      <td>{p.name}</td>
-                      <td>{p.origin}</td>
-                      <td>{p.partner_name}</td>
-                      <td>
-                        {p.scheduled_date
-                          ? new Date(p.scheduled_date).toLocaleString()
-                          : '-'}
-                      </td>
-                      <td>{p.state}</td>
-                      <td>
-                        {p.final_customer_completed ? (
-                          <span className="badge badge-ok">
-                            Cargado
-                            {p.final_customer_name
-                              ? ` (${p.final_customer_name})`
-                              : ''}
-                          </span>
-                        ) : (
-                          <span className="badge badge-pending">Pendiente</span>
+      {pickings.length > 0 && (
+        <table className="pickings-table">
+          <thead>
+            <tr>
+              <th>Remito</th>
+              <th>Pedido</th>
+              <th>Cliente distribuidor</th>
+              <th>Fecha programada</th>
+              <th>Estado</th>
+              <th>Cliente final</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pickings.map((p) => (
+              <>
+                <tr key={p.id}>
+                  <td>{p.name}</td>
+                  <td>{p.origin || '-'}</td>
+                  <td>{p.partner_name || '-'}</td>
+                  <td>{formatDate(p.scheduled_date)}</td>
+                  <td>{p.state}</td>
+                  <td>
+                    {p.final_customer_completed ? (
+                      <>
+                        Cargado
+                        {p.final_customer_name && (
+                          <>
+                            : <strong>{p.final_customer_name}</strong>
+                          </>
                         )}
-                      </td>
-                      <td className="actions-cell">
-                        <button
-                          type="button"
-                          onClick={() => toggleExpand(p.id)}
-                        >
-                          {expandedId === p.id ? 'Ocultar detalle' : 'Ver detalle'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openForm(p)}
-                          style={{ marginLeft: '0.4rem' }}
-                        >
-                          {p.final_customer_completed
-                            ? 'Editar cliente final'
-                            : 'Completar cliente final'}
-                        </button>
-                      </td>
-                    </tr>
+                      </>
+                    ) : (
+                      'Pendiente'
+                    )}
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(p.id)}
+                    >
+                      {expandedId === p.id ? 'Ocultar' : 'Detalle / Cargar'}
+                    </button>
+                  </td>
+                </tr>
 
-                    {expandedId === p.id && (
-                      <tr className="detail-row">
-                        <td colSpan={7}>
-                          {p.lines && p.lines.length > 0 ? (
-                            <table className="inner-table">
+                {expandedId === p.id && (
+                  <tr className="detail-row" key={`${p.id}-detail`}>
+                    <td colSpan={7}>
+                      <div className="detail-container">
+                        <div className="detail-left">
+                          <h3>Detalle de productos</h3>
+                          {(!p.lines || p.lines.length === 0) && (
+                            <p>No hay líneas de producto.</p>
+                          )}
+                          {p.lines && p.lines.length > 0 && (
+                            <table className="lines-table">
                               <thead>
                                 <tr>
-                                  <th style={{ width: '15%' }}>Cantidad</th>
-                                  <th>Descripción</th>
-                                  <th style={{ width: '15%' }}>U.M.</th>
+                                  <th>Producto</th>
+                                  <th>Cantidad</th>
+                                  <th>UdM</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {p.lines.map((ln) => (
-                                  <tr key={ln.id}>
-                                    <td>{ln.quantity}</td>
-                                    <td>{ln.product_name}</td>
-                                    <td>{ln.uom}</td>
+                                {p.lines.map((line) => (
+                                  <tr key={line.id}>
+                                    <td>{line.product_name}</td>
+                                    <td>{line.quantity}</td>
+                                    <td>{line.uom}</td>
                                   </tr>
                                 ))}
                               </tbody>
                             </table>
-                          ) : (
-                            <p>Este remito no tiene líneas para mostrar.</p>
                           )}
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </>
-      )}
+                        </div>
 
-      {selected && (
-        <div className="form-container">
-          <h2>
-            Cliente final para remito {selected.name} ({selected.origin})
-          </h2>
-          {selected.final_customer_completed && (
-            <p className="info-text">
-              Este remito ya tiene cliente final cargado. Podés actualizar los
-              datos si es necesario.
-            </p>
-          )}
-          <form onSubmit={handleSubmit} className="form">
-            <div className="form-row">
-              <label>Nombre / Razón social</label>
-              <input
-                name="name"
-                value={form.name}
-                onChange={handleChange}
-                required
-              />
-            </div>
+                        <div className="detail-right">
+                          <h3>Datos del cliente final</h3>
+                          <form onSubmit={(e) => handleSubmitFinalCustomer(p.id, e)}>
+                            <div className="form-group">
+                              <label>Nombre / Razón social</label>
+                              <input
+                                type="text"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleFormChange}
+                                required
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label>Calle y número</label>
+                              <input
+                                type="text"
+                                name="street"
+                                value={formData.street}
+                                onChange={handleFormChange}
+                                required
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label>Localidad</label>
+                              <input
+                                type="text"
+                                name="city"
+                                value={formData.city}
+                                onChange={handleFormChange}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label>CUIT / DNI</label>
+                              <input
+                                type="text"
+                                name="vat"
+                                value={formData.vat}
+                                onChange={handleFormChange}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label>Teléfono</label>
+                              <input
+                                type="text"
+                                name="phone"
+                                value={formData.phone}
+                                onChange={handleFormChange}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label>Notas</label>
+                              <textarea
+                                name="notes"
+                                rows={3}
+                                value={formData.notes}
+                                onChange={handleFormChange}
+                              />
+                            </div>
 
-            <div className="form-row">
-              <label>Calle y número</label>
-              <input
-                name="street"
-                value={form.street}
-                onChange={handleChange}
-                required
-              />
-            </div>
-
-            <div className="form-row">
-              <label>Localidad / Ciudad</label>
-              <input
-                name="city"
-                value={form.city}
-                onChange={handleChange}
-                required
-              />
-            </div>
-
-            <div className="form-row">
-              <label>CUIT / DNI</label>
-              <input name="vat" value={form.vat} onChange={handleChange} />
-            </div>
-
-            <div className="form-row">
-              <label>Teléfono</label>
-              <input
-                name="phone"
-                value={form.phone}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div className="form-row">
-              <label>Aclaraciones</label>
-              <textarea
-                name="notes"
-                value={form.notes}
-                onChange={handleChange}
-                rows={3}
-              />
-            </div>
-
-            <div className="form-actions">
-              <button type="button" onClick={handleCancel} disabled={saving}>
-                Cancelar
-              </button>
-              <button type="submit" disabled={saving}>
-                {saving ? 'Guardando...' : 'Guardar'}
-              </button>
-            </div>
-          </form>
-        </div>
+                            <button type="submit">
+                              Guardar datos del cliente final
+                            </button>
+                          </form>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );
