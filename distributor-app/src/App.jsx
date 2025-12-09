@@ -35,25 +35,26 @@ function App() {
     }
   }, []);
 
+  // Función reutilizable para cargar pickings
+  const loadPickings = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const data = await fetchPickings();
+      setPickings(data || []);
+    } catch (err) {
+      console.error(err);
+      setError('Error al cargar las entregas desde Odoo.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Cargar pickings cuando está logueado
   useEffect(() => {
     if (!loggedIn) return;
-
-    async function load() {
-      try {
-        setLoading(true);
-        setError('');
-        const data = await fetchPickings();
-        setPickings(data || []);
-      } catch (err) {
-        console.error(err);
-        setError('Error al cargar las entregas desde Odoo.');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    load();
+    loadPickings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loggedIn]);
 
   // 🔐 Login
@@ -83,7 +84,6 @@ function App() {
   // UI helpers
   const toggleExpand = (id) => {
     setExpandedId((prev) => (prev === id ? null : id));
-    // Podés resetear el form si querés:
     setFormData({
       name: '',
       street: '',
@@ -113,8 +113,7 @@ function App() {
       await setFinalCustomer(pickingId, formData);
 
       // Refrescar lista
-      const data = await fetchPickings();
-      setPickings(data || []);
+      await loadPickings();
 
       alert('Datos del cliente final guardados correctamente.');
       setExpandedId(null);
@@ -136,7 +135,6 @@ function App() {
 
   const formatDate = (value) => {
     if (!value) return '';
-    // value viene como string ISO normalmente
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return value;
     return d.toLocaleDateString('es-AR');
@@ -170,9 +168,18 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>Entregas vía distribuidor</h1>
-        <button type="button" onClick={handleLogout}>
-          Salir
-        </button>
+        <div className="app-header-actions">
+          <button
+            type="button"
+            onClick={loadPickings}
+            disabled={loading}
+          >
+            {loading ? 'Actualizando...' : 'Actualizar'}
+          </button>
+          <button type="button" onClick={handleLogout}>
+            Salir
+          </button>
+        </div>
       </header>
 
       {loading && <p>Cargando...</p>}
