@@ -24,8 +24,22 @@ function App() {
     city: '',
     vat: '',
     phone: '',
+    email: '', // 👈 NUEVO
     notes: '',
   });
+
+  // Helper para resetear el form
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      street: '',
+      city: '',
+      vat: '',
+      phone: '',
+      email: '',
+      notes: '',
+    });
+  };
 
   // Al montar, ver si ya estaba logueado en esta máquina
   useEffect(() => {
@@ -79,19 +93,13 @@ function App() {
     localStorage.removeItem('distributor_app_logged_in');
     setPickings([]);
     setExpandedId(null);
+    resetForm();
   };
 
   // UI helpers
   const toggleExpand = (id) => {
     setExpandedId((prev) => (prev === id ? null : id));
-    setFormData({
-      name: '',
-      street: '',
-      city: '',
-      vat: '',
-      phone: '',
-      notes: '',
-    });
+    resetForm();
   };
 
   const handleFormChange = (e) => {
@@ -117,14 +125,7 @@ function App() {
 
       alert('Datos del cliente final guardados correctamente.');
       setExpandedId(null);
-      setFormData({
-        name: '',
-        street: '',
-        city: '',
-        vat: '',
-        phone: '',
-        notes: '',
-      });
+      resetForm();
     } catch (err) {
       console.error(err);
       setError('Error al guardar los datos del cliente final.');
@@ -313,6 +314,15 @@ function App() {
                                 type="text"
                                 name="phone"
                                 value={formData.phone}
+                                onChange={handleFormChange}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label>Correo electrónico</label>
+                              <input
+                                type="email"
+                                name="email"
+                                value={formData.email}
                                 onChange={handleFormChange}
                               />
                             </div>

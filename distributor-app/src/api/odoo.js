@@ -1,3 +1,4 @@
+// src/api/odoo.js
 const BASE_URL = import.meta.env.VITE_ODOO_BASE_URL;
 const ODOO_USER = import.meta.env.VITE_ODOO_USER;
 const ODOO_API_KEY = import.meta.env.VITE_ODOO_API_KEY;
