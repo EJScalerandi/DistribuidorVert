@@ -3,7 +3,7 @@ const BASE_URL = import.meta.env.VITE_ODOO_BASE_URL;
 const ODOO_USER = import.meta.env.VITE_ODOO_USER;
 const ODOO_API_KEY = import.meta.env.VITE_ODOO_API_KEY;
 
-// Header de Basic Auth (user:api_key)
+// Armamos header Basic Auth (lo usamos en los GET/POST simples)
 const AUTH_HEADER =
   ODOO_USER && ODOO_API_KEY
     ? 'Basic ' + btoa(`${ODOO_USER}:${ODOO_API_KEY}`)
@@ -20,18 +20,7 @@ function getHeaders(isJson = false) {
   return headers;
 }
 
-// Helper para aceptar distintos formatos de respuesta:
-//  - [ ... ]
-//  - { data: [ ... ] }
-//  - { products: [ ... ] }
-function parseDataArray(json) {
-  if (Array.isArray(json)) return json;
-  if (json && Array.isArray(json.data)) return json.data;
-  if (json && Array.isArray(json.products)) return json.products;
-  return [];
-}
-
-// ===== ENTREGAS / PICKINGS =====
+// === PICKINGS =====================================================
 
 export async function fetchPickings() {
   const res = await fetch(`${BASE_URL}/distributor/api/pickings`, {
@@ -45,7 +34,7 @@ export async function fetchPickings() {
   }
 
   const data = await res.json();
-  return parseDataArray(data);
+  return data.data || [];
 }
 
 export async function setFinalCustomer(pickingId, payload) {
@@ -66,7 +55,7 @@ export async function setFinalCustomer(pickingId, payload) {
   return await res.json();
 }
 
-// ===== PRODUCTOS (lista VIP / Vert Deco) =====
+// === PRODUCTOS (Lista Vip) =======================================
 
 export async function fetchProducts() {
   const res = await fetch(`${BASE_URL}/distributor/api/products`, {
@@ -80,10 +69,10 @@ export async function fetchProducts() {
   }
 
   const data = await res.json();
-  return parseDataArray(data);
+  return data.data || [];
 }
 
-// ===== DISTRIBUIDORES (partners con etiqueta Distribuidor) =====
+// === DISTRIBUIDORES (partners con etiqueta Distribuidor) =========
 
 export async function fetchDistributors() {
   const res = await fetch(`${BASE_URL}/distributor/api/distributors`, {
@@ -97,15 +86,21 @@ export async function fetchDistributors() {
   }
 
   const data = await res.json();
-  return parseDataArray(data);
+  return data.data || [];
 }
 
-// ===== COTIZACIONES =====
+// === COTIZACIONES (POST) =========================================
+// Acá hacemos el POST "simple" para evitar problemas de preflight CORS.
+// - Sin Authorization
+// - Content-Type: text/plain
+// El body sigue siendo JSON y el controlador de Odoo lo parsea igual.
 
 export async function createQuotation(payload) {
   const res = await fetch(`${BASE_URL}/distributor/api/quotations`, {
     method: 'POST',
-    headers: getHeaders(true),
+    headers: {
+      'Content-Type': 'text/plain',
+    },
     body: JSON.stringify(payload),
   });
 
@@ -114,8 +109,5 @@ export async function createQuotation(payload) {
     throw new Error(`Error ${res.status}: ${text}`);
   }
 
-  const data = await res.json();
-  // Puede venir como {name, order_id} o envuelto en data
-  if (data && data.data) return data.data;
-  return data;
+  return await res.json();
 }
