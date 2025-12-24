@@ -26,6 +26,14 @@ const formatCurrency = (value) =>
     maximumFractionDigits: 2,
   });
 
+// Texto para el estado "listo para retirar"
+const getReadyLabel = (p) => {
+  if (p.ready_status) return p.ready_status;
+  if (p.ready_to_pick === true) return 'Listo para retirar';
+  if (p.ready_to_pick === false) return 'En fabricación / pendiente';
+  return '-';
+};
+
 function App() {
   // 🔐 Login
   const [loggedIn, setLoggedIn] = useState(false);
@@ -238,7 +246,7 @@ function App() {
           product_id: product.id,
           name: product.name,
           uom: product.uom_name,
-          price: product.list_price ?? 0, // se usa para subtotal/total, pero NO se muestra en el carrito
+          price: product.list_price ?? 0, // usado solo para subtotal/total
           quantity: 1,
         },
       ];
@@ -252,7 +260,7 @@ function App() {
       if (field === 'quantity') {
         clone[index] = { ...clone[index], quantity: Number(value) || 0 };
       } else if (field === 'price') {
-        // ya no se edita desde UI, pero lo dejamos por compatibilidad
+        // dejado por compatibilidad, aunque no se edita desde UI
         clone[index] = { ...clone[index], price: Number(value) || 0 };
       }
       return clone;
@@ -389,7 +397,7 @@ function App() {
                   <th>Pedido</th>
                   <th>Cliente distribuidor</th>
                   <th>Fecha programada</th>
-                  <th>Estado</th>
+                  <th>Listo para retirar</th>
                   <th>Cliente final</th>
                   <th>Acciones</th>
                 </tr>
@@ -402,7 +410,21 @@ function App() {
                       <td>{p.origin || '-'}</td>
                       <td>{p.partner_name || '-'}</td>
                       <td>{formatDate(p.scheduled_date)}</td>
-                      <td>{p.state}</td>
+
+                      {/* NUEVA COLUMNA: Listo para retirar */}
+                      <td>
+                        {p.ready_to_pick === true && (
+                          <span className="status-pill status-pill--ready">
+                            {getReadyLabel(p)}
+                          </span>
+                        )}
+                        {p.ready_to_pick === false && (
+                          <span className="status-pill status-pill--pending">
+                            {getReadyLabel(p)}
+                          </span>
+                        )}
+                        {p.ready_to_pick == null && <span>-</span>}
+                      </td>
                       <td>
                         {p.final_customer_completed ? (
                           <>
@@ -426,7 +448,7 @@ function App() {
 
                     {expandedId === p.id && (
                       <tr className="detail-row">
-                        <td colSpan={7}>
+                        <td colSpan={8}>
                           <div className="detail-container">
                             <div className="detail-left">
                               <h3>Detalle de productos</h3>
@@ -564,7 +586,6 @@ function App() {
             <div className="form-group" style={{ maxWidth: 260 }}>
               <label>Cliente / distribuidor</label>
 
-              {/* NUEVO: wrapper + clase del select */}
               <div className="select-wrapper">
                 <select
                   name="distributor"
@@ -606,7 +627,6 @@ function App() {
                 <thead>
                   <tr>
                     <th>Producto</th>
-                    <th>Código</th>
                     <th>UdM</th>
                     <th>Precio lista</th>
                     <th />
@@ -616,11 +636,13 @@ function App() {
                   {products.map((p) => (
                     <tr key={p.id}>
                       <td>{p.name}</td>
-                      <td>{p.default_code || '-'}</td>
                       <td>{p.uom_name || '-'}</td>
                       <td>{formatCurrency(p.list_price)}</td>
                       <td>
-                        <button type="button" onClick={() => handleAddProductLine(p)}>
+                        <button
+                          type="button"
+                          onClick={() => handleAddProductLine(p)}
+                        >
                           Agregar
                         </button>
                       </td>
@@ -647,7 +669,6 @@ function App() {
                       <th>Producto</th>
                       <th>Cant.</th>
                       <th>UdM</th>
-                      {/* NUEVO: ocultamos precio en carrito */}
                       <th>Subtotal</th>
                       <th />
                     </tr>
@@ -666,18 +687,22 @@ function App() {
                               step="1"
                               value={l.quantity}
                               onChange={(e) =>
-                                handleQuoteLineChange(index, 'quantity', e.target.value)
+                                handleQuoteLineChange(
+                                  index,
+                                  'quantity',
+                                  e.target.value
+                                )
                               }
                               style={{ width: '70px' }}
                             />
                           </td>
                           <td>{l.uom || '-'}</td>
-
-                          {/* NUEVO: mostramos subtotal pero no el input de precio */}
                           <td>{formatCurrency(subtotal)}</td>
-
                           <td>
-                            <button type="button" onClick={() => handleRemoveLine(index)}>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveLine(index)}
+                            >
                               X
                             </button>
                           </td>
@@ -716,8 +741,11 @@ function App() {
               </p>
             )}
 
-            {/* NUEVO: clases del botón principal */}
-            <button type="submit" disabled={quoteLoading} className="btn btn-primary">
+            <button
+              type="submit"
+              disabled={quoteLoading}
+              className="btn btn-primary"
+            >
               {quoteLoading ? 'Enviando a Odoo...' : 'Crear cotización en Odoo'}
             </button>
           </form>
