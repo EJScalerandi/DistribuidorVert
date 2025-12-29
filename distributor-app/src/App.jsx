@@ -6,10 +6,10 @@ import {
   fetchProducts,
   fetchDistributors,
   createQuotation,
+  setOdooDistributorId,
 } from './api/odoo';
+import { loginDistributorSimple } from './api/auth';
 import './App.css';
-
-const APP_PASSWORD = import.meta.env.VITE_APP_LOGIN_PASSWORD;
 
 // ===== Helpers comunes =====
 
@@ -26,7 +26,6 @@ const formatCurrency = (value) =>
     maximumFractionDigits: 2,
   });
 
-// Texto para el estado "listo para retirar"
 const getReadyLabel = (p) => {
   if (p.ready_status) return p.ready_status;
   if (p.ready_to_pick === true) return 'Listo para retirar';
@@ -35,12 +34,16 @@ const getReadyLabel = (p) => {
 };
 
 function App() {
-  // 🔐 Login
+  // 🔐 Login (Supabase RPC)
   const [loggedIn, setLoggedIn] = useState(false);
+  const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  // 🧭 Pestañas: entregas vs pedidos
+  // Contexto de sesión (para segmentar por etiqueta en Odoo)
+  const [sessionCtx, setSessionCtx] = useState(null);
+
+  // 🧭 Pestañas
   const [activeTab, setActiveTab] = useState('deliveries'); // 'deliveries' | 'orders'
 
   // 📦 Entregas / pickings
@@ -49,7 +52,7 @@ function App() {
   const [pickingsError, setPickingsError] = useState('');
   const [expandedId, setExpandedId] = useState(null);
 
-  // 📝 Form de cliente final (entregas)
+  // 📝 Form cliente final
   const [formData, setFormData] = useState({
     name: '',
     street: '',
@@ -93,15 +96,24 @@ function App() {
   const resetQuoteForm = () => {
     setQuoteLines([]);
     setQuoteNotes('');
-    // NO reseteamos el distribuidor elegido
   };
 
   // ===== Efectos =====
 
   useEffect(() => {
-    const stored = localStorage.getItem('distributor_app_logged_in');
-    if (stored === '1') {
-      setLoggedIn(true);
+    const stored = localStorage.getItem('distributor_app_session');
+    if (!stored) return;
+
+    try {
+      const parsed = JSON.parse(stored);
+      if (parsed?.login_id) {
+        setLoggedIn(true);
+        setSessionCtx(parsed);
+        setOdooDistributorId(parsed?.odoo_distributor_id ?? null);
+      }
+    } catch {
+      // si está corrupto, lo limpiamos
+      localStorage.removeItem('distributor_app_session');
     }
   }, []);
 
@@ -139,7 +151,6 @@ function App() {
       setDistributorsError('');
       const data = await fetchDistributors();
       setDistributors(data || []);
-      // Si hay uno solo, lo seleccionamos por defecto
       if (!selectedDistributorId && data.length === 1) {
         setSelectedDistributorId(String(data[0].id));
       }
@@ -161,27 +172,40 @@ function App() {
 
   // ===== Login =====
 
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    if (!APP_PASSWORD) {
-      setLoginError(
-        'No hay contraseña configurada en el servidor (VITE_APP_LOGIN_PASSWORD).'
-      );
-      return;
-    }
-    if (loginPassword === APP_PASSWORD) {
-      setLoggedIn(true);
-      localStorage.setItem('distributor_app_logged_in', '1');
-      setLoginPassword('');
+    try {
       setLoginError('');
-    } else {
-      setLoginError('Contraseña incorrecta');
+
+      const res = await loginDistributorSimple(loginUsername, loginPassword);
+      if (!res.ok) {
+        setLoginError('Usuario o contraseña incorrectos.');
+        return;
+      }
+
+      const ctx = {
+        login_id: res.login_id,
+        odoo_distributor_id: res.odoo_distributor_id ?? null,
+      };
+
+      setSessionCtx(ctx);
+      setOdooDistributorId(ctx.odoo_distributor_id);
+      localStorage.setItem('distributor_app_session', JSON.stringify(ctx));
+
+      setLoggedIn(true);
+      setLoginUsername('');
+      setLoginPassword('');
+    } catch (err) {
+      console.error(err);
+      setLoginError(err?.message || 'Error al iniciar sesión.');
     }
   };
 
   const handleLogout = () => {
     setLoggedIn(false);
-    localStorage.removeItem('distributor_app_logged_in');
+    setSessionCtx(null);
+    setOdooDistributorId(null);
+    localStorage.removeItem('distributor_app_session');
     setPickings([]);
     setExpandedId(null);
     resetForm();
@@ -212,9 +236,7 @@ function App() {
       setLoadingPickings(true);
       setPickingsError('');
       await setFinalCustomer(pickingId, formData);
-
       await loadPickings();
-
       alert('Datos del cliente final guardados correctamente.');
       setExpandedId(null);
       resetForm();
@@ -246,7 +268,7 @@ function App() {
           product_id: product.id,
           name: product.name,
           uom: product.uom_name,
-          price: product.list_price ?? 0, // usado solo para subtotal/total
+          price: product.list_price ?? 0,
           quantity: 1,
         },
       ];
@@ -260,7 +282,6 @@ function App() {
       if (field === 'quantity') {
         clone[index] = { ...clone[index], quantity: Number(value) || 0 };
       } else if (field === 'price') {
-        // dejado por compatibilidad, aunque no se edita desde UI
         clone[index] = { ...clone[index], price: Number(value) || 0 };
       }
       return clone;
@@ -324,15 +345,28 @@ function App() {
       <div className="login-page">
         <div className="login-card">
           <h1>Ingreso distribuidor</h1>
+
           <form onSubmit={handleLoginSubmit}>
+            <div className="form-group">
+              <label>Usuario</label>
+              <input
+                type="text"
+                value={loginUsername}
+                onChange={(e) => setLoginUsername(e.target.value)}
+                autoComplete="username"
+              />
+            </div>
+
             <div className="form-group">
               <label>Contraseña</label>
               <input
                 type="password"
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
+                autoComplete="current-password"
               />
             </div>
+
             {loginError && <div className="error">{loginError}</div>}
             <button type="submit">Entrar</button>
           </form>
@@ -361,7 +395,6 @@ function App() {
         </div>
       </header>
 
-      {/* NAV de pestañas */}
       <nav className="app-tabs" style={{ marginBottom: '1rem' }}>
         <button
           type="button"
@@ -410,8 +443,6 @@ function App() {
                       <td>{p.origin || '-'}</td>
                       <td>{p.partner_name || '-'}</td>
                       <td>{formatDate(p.scheduled_date)}</td>
-
-                      {/* NUEVA COLUMNA: Listo para retirar */}
                       <td>
                         {p.ready_to_pick === true && (
                           <span className="status-pill status-pill--ready">
@@ -574,7 +605,6 @@ function App() {
             Presupuesto rápido
           </h2>
 
-          {/* Selector de distribuidor */}
           <div
             style={{
               display: 'flex',
@@ -610,7 +640,6 @@ function App() {
           {loadingProducts && <p>Cargando productos...</p>}
           {productsError && <p className="error">{productsError}</p>}
 
-          {/* Lista de productos para agregar */}
           {products.length > 0 && (
             <div
               style={{
@@ -653,7 +682,6 @@ function App() {
             </div>
           )}
 
-          {/* Carrito / líneas de la cotización */}
           <form onSubmit={handleCreateQuote}>
             {quoteLines.length === 0 && (
               <p style={{ marginBottom: '0.75rem' }}>
@@ -724,7 +752,6 @@ function App() {
               </div>
             )}
 
-            {/* Solo notas internas */}
             <div className="form-group" style={{ marginBottom: '0.75rem' }}>
               <label>Notas internas / comentarios</label>
               <textarea
