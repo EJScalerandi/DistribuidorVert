@@ -33,6 +33,14 @@ const getReadyLabel = (p) => {
   return '-';
 };
 
+// ✅ NUEVO: parseo robusto para decimales (soporta coma o punto)
+const parseDecimal = (value) => {
+  if (value == null) return 0;
+  const normalized = String(value).replace(',', '.');
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : 0;
+};
+
 function App() {
   // 🔐 Login (Supabase RPC)
   const [loggedIn, setLoggedIn] = useState(false);
@@ -258,7 +266,7 @@ function App() {
         const old = clone[existingIndex];
         clone[existingIndex] = {
           ...old,
-          quantity: Number(old.quantity || 0) + 1,
+          quantity: parseDecimal(old.quantity) + 1, // suma 1 (sigue siendo decimal)
         };
         return clone;
       }
@@ -279,10 +287,11 @@ function App() {
     setQuoteLines((prev) => {
       const clone = [...prev];
       if (!clone[index]) return prev;
+
       if (field === 'quantity') {
-        clone[index] = { ...clone[index], quantity: Number(value) || 0 };
+        clone[index] = { ...clone[index], quantity: parseDecimal(value) };
       } else if (field === 'price') {
-        clone[index] = { ...clone[index], price: Number(value) || 0 };
+        clone[index] = { ...clone[index], price: parseDecimal(value) };
       }
       return clone;
     });
@@ -293,7 +302,8 @@ function App() {
   };
 
   const quoteTotal = quoteLines.reduce(
-    (sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.price) || 0),
+    (sum, l) =>
+      sum + parseDecimal(l.quantity) * parseDecimal(l.price),
     0
   );
 
@@ -320,7 +330,7 @@ function App() {
         notes: quoteNotes,
         lines: quoteLines.map((l) => ({
           product_id: l.product_id,
-          quantity: Number(l.quantity) || 0,
+          quantity: parseDecimal(l.quantity), // ✅ decimales
         })),
       };
 
@@ -704,15 +714,17 @@ function App() {
                   <tbody>
                     {quoteLines.map((l, index) => {
                       const subtotal =
-                        (Number(l.quantity) || 0) * (Number(l.price) || 0);
+                        parseDecimal(l.quantity) * parseDecimal(l.price);
                       return (
                         <tr key={l.product_id}>
                           <td>{l.name}</td>
                           <td>
+                            {/* ✅ MODIFICADO: permite decimales */}
                             <input
                               type="number"
+                              inputMode="decimal"
                               min="0"
-                              step="1"
+                              step="0.01"
                               value={l.quantity}
                               onChange={(e) =>
                                 handleQuoteLineChange(
@@ -721,7 +733,7 @@ function App() {
                                   e.target.value
                                 )
                               }
-                              style={{ width: '70px' }}
+                              style={{ width: '90px' }}
                             />
                           </td>
                           <td>{l.uom || '-'}</td>
